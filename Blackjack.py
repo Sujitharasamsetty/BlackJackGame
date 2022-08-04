@@ -1,9 +1,10 @@
 from flask import Flask
 from flask import render_template
 import random
+from database import db_session, init_db
+from models import Deck, UserHand, ComputerHand
 
-app=Flask(__name__)
-
+app = Flask(__name__)
 
 CARD_SCORES = {
     '6': 6,
@@ -16,6 +17,7 @@ CARD_SCORES = {
     'Korol': 4,
     'Tuz': 11
 }
+
 
 @app.route('/')
 def home():
@@ -62,4 +64,87 @@ def stop():
     return render_template('score.jinja2', result=result, computer_score=computer_score, user_score=user_score)
 
 
+def init_or_flush_cards():
+    '''
+    Creates tables and clears them
+    '''
+    init_db()
+    for database in [UserHand, ComputerHand, Deck]:
+        database.query.delete()
+    save()
 
+
+def generate_deck():
+    '''
+    Generates list of cards and stores it to model
+    '''
+    deck = [a for a in CARD_SCORES.keys()] * 4
+    random.shuffle(deck, random.random)
+    for card in deck:
+        card = Deck(str(card))
+        db_session.add(card)
+    save()
+
+
+def get_deck():
+    return Deck.query.all()
+
+
+def get_user_cards():
+    return UserHand.query.all()
+
+
+def get_computer_cards():
+    return ComputerHand.query.all()
+
+
+def add_user_card(card):
+    card = UserHand(card)
+    db_session.add(card)
+    save()
+
+
+def add_computer_card(card):
+    card = ComputerHand(card)
+    db_session.add(card)
+    save()
+
+
+def get_card_from_deck():
+    '''
+    Gets top card and removes it from deck
+    :return: card String
+    '''
+    deck = get_deck()
+    card = str(deck.pop(0))
+    db_session.delete(Deck.query.filter_by(card=card).first())
+    save()
+    return card
+
+
+def save():
+    try:
+        db_session.commit()
+    except Exception as e:
+        print (e)
+
+
+def calc_score(cards):
+    '''
+    :param cards: List of cards
+    :return: Score of given cards set
+    '''
+    score = 0
+    for card in cards:
+        score += CARD_SCORES[str(card)]
+    return score
+
+
+@app.teardown_appcontext
+def shutdown_session(exception=None):
+    db_session.remove()
+    print (exception)
+
+
+if __name__ == '__main__':
+    app.run()
